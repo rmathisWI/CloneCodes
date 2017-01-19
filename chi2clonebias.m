@@ -83,11 +83,15 @@ for t = 1:size(Xsqr,2);
 end
 
 pvals_bias = chi2cdf(Xsqr,1,'upper');
-bias = all(pvals_bias < 0.01,2);
+s = size(pvals_bias);
+FDR_bias = reshape(mafdr(pvals_bias(:),'BHFDR',1),s);
+bias = all(FDR_bias < 0.05,2);
 [~,i] = min(abs(frac_ep-.6));
 
 %% test if reads are more than expected from contamination
 %this requires computing the reads from contamination.
+%calculate the probability a read from a cell of state S ends up in the
+%not-S sorted population 
 reads_i = readtable('clonereads.txt','Delimiter','\t','ReadRowNames',1); %load in reads of clones
 labeli = cellfun(@(x) {x(1:2)},reads_i.Properties.VariableNames);
 label = unique(labeli);
@@ -99,53 +103,74 @@ end
 
 timepoints = cellfun(@str2num,(cellfun(@(x) {x(2)}, reads.Properties.VariableNames)));
 states = cellfun(@(x) {x(1)}, reads.Properties.VariableNames);
-%contamination_fraction = [0.0771, 0.0512, 0.0479, 0.0637, 0.0605, 0.0553];
+%contamination_fraction = frac contam. in  [E1, E2, E3, M1, M2, M3];
+cf_labels = {'E1','E2','E3','M1','M2','M3'};
 contamination_fraction = [0.0488, 0.0263, 0.0260, 0.0648, 0.0441, 0.0353];
 contam_reads = zeros(size(reads));
 pvals_notcontam = ones(size(reads));
 n=0;
 for s = 1 : 2; % for each state
     for t = 1 : max(timepoints) %for each time point
-        n = n+1;
+        n=n+1;
         switch s
             case 1 % epithelial
-                Srt = 0.5968;
-                St = 'E';
-                Srs = 'M';
+                %Srt = 0.5968;
+                Cor = 'E';  %correctly-sorted gate 
+                InCor = 'M'; %incorrectly-sorted gate
             case 2 % mesenchymal
-                Srt = 0.4032;
-                St = 'M';
-                Srs = 'E';
+                %Srt = 0.4032;
+                Cor = 'M';  %correctly-sorted gate 
+                InCor = 'E'; %incorrectly-sorted gate
         end 
-        cfr = contamination_fraction(n); % fraction contamination here
-        i_st = strcmp(states,St) & timepoints == t; % ID of current state
-        i_srs = strcmp(states,Srs) & timepoints == t; % ID of source of contamination
-        contam_reads(:,n) = cfr .* reads{:,i_srs} .* (1-Srt) .* (1/sum(reads{:,i_srs})) .* (1/Srt) .* sum(reads{:,i_st});
-        pC = cfr * (1-Srt) * (1/sum(reads{:,i_srs})) * (1/Srt) * sum(reads{:,i_st});
-        %r = contam_reads(:,n) ./ reads{:,i_srs};
-        %now use test to determine significance of more reads than expect.
+        
+        cfr_Cor = contamination_fraction(strcmp(cf_labels,horzcat(Cor,num2str(t)))); % fraction contamination of sorted population of state S
+        cfr_InCor = contamination_fraction(strcmp(cf_labels,horzcat(InCor,num2str(t)))); % fraction contamination of other sorted population
+        i_Cor = strcmp(states,Cor) & timepoints == t; % ID of state S
+        i_InCor = strcmp(states,InCor) & timepoints == t; % ID of other state
+        
+        S = sum(reads{:,i_Cor}) * (1-cfr_Cor); % reads for correctly sorted cells of state S
+        S_prime = sum(reads{:,i_InCor}) * cfr_InCor; % reads for incorrectly sorted cells of state S
+        pC = S_prime / (S + S_prime);  % proportion of reads from state S that are mis-sorted
+        
+        %now use binomial test to determine significance of more reads than expect.
         rds = sum(reads{:,timepoints == t},2);
-        obs = reads{:,i_st};
+        obs = reads{:,i_InCor};
         pvals_notcontam(:,n) = binocdf(obs,rds,pC,'upper');
     end
 end
 
+%make q values: turn pvals to vector, calculate Q values, return to matrix.
+s = size(pvals_notcontam);
+FDR = mafdr(pvals_notcontam(:),'BHFDR',1);
+FDRvals_notcontam = reshape(FDR,s);
+
 % how many clones are bilineage (reject that they are by sort contamination
 % ) in all 3 time points?
-n_bilineage = nnz(all(pvals_notcontam < 0.01,2));
+n_bilineage = nnz(all(FDRvals_notcontam < 0.05,2));
+bilineage = zeros(size(pvals_notcontam,1),max(timepoints));
+for t = 1:max(timepoints)
+    bilineage(:,t) = all(FDRvals_notcontam(:,timepoints==t) < 0.05,2);
+end
+is_bilineage = any(bilineage,2);
+n_bilineage = nnz(is_bilineage);
+
 %how many clones are monolineage (reject that they are by sort
 %contamination in only 1 state in all 3 time points. Same state obviously.)
 states = cellfun(@(x) {x(1)}, reads.Properties.VariableNames);
 st = {'E','M'};
 monolineage = zeros(size(pvals_notcontam,1),2);
 for s = 1:2
-    p = pvals_notcontam(:,strcmp(states,st{s})); %pvals of state
-    np = pvals_notcontam(:,~strcmp(states,st{s})); %pvals of other state
-    monolineage(:,s) = all(p<0.01,2) & ~any(np<0.01,2);
+    FDR = FDRvals_notcontam(:,strcmp(states,st{s})); %FDRs of state
+    nFDR = FDRvals_notcontam(:,~strcmp(states,st{s})); %FDRs of other state
+    monolineage(:,s) = all(FDR<0.05,2) & ~any(nFDR<0.05,2);
 end
 if any((monolineage(:,1) & monolineage(:,2)))
     error('something is wrong in monolineage calculation')
 end
+if any((monolineage(:,1) | monolineage(:,2)) & (is_bilineage))
+    error('clones are being marked as mono and bilineage!')
+end
+
 n_monolineage = nnz(monolineage(:,1) | monolineage(:,2));
 
 %% test if clones bias change over time
