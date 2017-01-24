@@ -2,9 +2,7 @@
 %compare to the median clone
 
 % Load in data
-reads_i = readtable('clonereads.txt','Delimiter','\t','ReadRowNames',1); %load in reads of clones
-%fracep = readtable('fraceps.txt','Delimiter','\t','ReadVariableNames',0);
-%fracep = table2array(fracep);
+reads_i = readtable('clonereads.txt','Delimiter','\t','ReadRowNames',1,'HeaderLines',1); %load in reads of clones
 %sum postsort replicates
 labeli = cellfun(@(x) {x(1:2)},reads_i.Properties.VariableNames);
 label = unique(labeli);
@@ -71,7 +69,7 @@ end
 
 
 % determine chi squared
-Xsqr = zeros(height(reads),max(timepoints)); 
+Xsqr = zeros(height(reads),max(timepoints));  
 for t = 1:size(Xsqr,2);
     tp = timepoints == timepoints(t); %find columns of time points
     
@@ -92,7 +90,7 @@ bias = all(FDR_bias < 0.05,2);
 %this requires computing the reads from contamination.
 %calculate the probability a read from a cell of state S ends up in the
 %not-S sorted population 
-reads_i = readtable('clonereads.txt','Delimiter','\t','ReadRowNames',1); %load in reads of clones
+reads_i = readtable('clonereads.txt','Delimiter','\t','ReadRowNames',1,'HeaderLines',1); %load in reads of clones
 labeli = cellfun(@(x) {x(1:2)},reads_i.Properties.VariableNames);
 label = unique(labeli);
 reads = array2table(zeros(height(reads_i),length(label)),'RowNames',reads_i.Properties.RowNames,'VariableNames',label);
