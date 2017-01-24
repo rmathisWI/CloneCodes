@@ -147,42 +147,4 @@ xlabel('mean growth rate')
 ylabel('log10 cell numbers day0');
 text(0.1,0.9,horzcat('rho = ',num2str(corr(k_mean,cellNs(:,1)))),'units','normalized');
 
-%% are more-epithelial clones larger?
-N0 = 2.9E7; %cells at first time point
-cellN0 = reads2{:,timepoints==1} .* N0;
-figure()
-fig = gcf;
-fig.InvertHardcopy='off';
-fig.Units='inches'; 
-fig.Position(3:4) = [3    2.5];
-fig.PaperPositionMode='Auto';
-fig.Renderer='painters';
-fig.Color = 'none';
-hold on
-[y,x] = ecdf(cellN0(L2EM<0));
-plot(x,y,'LineWidth',3);
-[y,x] = ecdf(cellN0(L2EM>0));
-plot(x,y,'LineWidth',3);
-text(0.1,0.8,horzcat('p = ',num2str(ranksum(cellN0(L2EM<0),cellN0(L2EM>0)))),'units','normalized','FontName','Arial','FontSize',10);
-ax = gca;
-ax.YDir = 'Normal';
-ax.Box = 'off';
-ax.TickDir = 'out';
-ax.Color = 'none';
-ax.FontName = 'Arial';
-ax.FontSize = 10;
-ax.LineWidth=1;
-ax.TitleFontSizeMultiplier=1;
-ax.LabelFontSizeMultiplier = 1; 
-ax.XScale = 'log';
-ax.XLim =[1 1E6];
-ax.XTick = [1 100  10000 1000000];
-L = legend({'more mes. clones','more epi. clones'},'location','NW','FontSize',10,'FontName','Arial');
-L.Box = 'off';
-xlabel('Cell Numbers at Day 0')
-ylabel('Cumulative Density');
-print('clonesize vs EM.svg','-dsvg');
 
-%% estimate growth rate distributions of more E and more M clones
-GRdistE = fitdist(k_mean(L2EM>0),'normal');
-GRdistM = fitdist(k_mean(L2EM<0),'normal');
