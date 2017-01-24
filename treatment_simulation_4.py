@@ -8,6 +8,7 @@ def ImportCloneDataset(inputfilename):
     file = open(inputfilename)
     csviterator = csv.reader(file, dialect = 'excel')
     result = []
+    next(csviterator)
     for row in csviterator:
         result.append([float(row[0]),float(row[1]),float(row[2])])
     file.close()
@@ -21,7 +22,7 @@ def WriteToOutput(header,result,outputfilename):
         resultwriter.writerow(list(column))
     outputfile.close()
 
-inputdata = ImportCloneDataset('observeddata3.csv');
+inputdata = ImportCloneDataset('observeddata.csv');
 # whole course is 500 time points
 # 30 time points make 2 days
 
